@@ -35,7 +35,20 @@ async function getRecipeDetails(recipe_id) {
     }
 }
 
+async function getRecipesPreview() {
+  try {
+    const recipesPreview = await DButils.execQuery(`
+      SELECT recipe_id AS id, title, imageUrl, likes, isVegan, isVegetarian, isGlutenFree 
+      FROM recipes
+    `);
+    return recipesPreview;
+  } catch (error) {
+    console.error("Error fetching recipes preview:", error);
+    throw error;
+  }
+}
 
+exports.getRecipesPreview = getRecipesPreview;
 
 exports.getRecipeDetails = getRecipeDetails;
 

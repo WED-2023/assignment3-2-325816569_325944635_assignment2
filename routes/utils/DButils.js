@@ -64,11 +64,11 @@ exports.initializeTables = async function () {
         FOREIGN KEY (ingredient_id) REFERENCES ingredients(ingredient_id) ON DELETE CASCADE
       );
     `);
-
     await MySql.query(`
       CREATE TABLE IF NOT EXISTS favorite_recipes (
         user_id INT NOT NULL,
         recipe_id INT NOT NULL,
+        source VARCHAR(255) NOT NULL DEFAULT 'db',
         PRIMARY KEY (user_id, recipe_id),
         FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
       );

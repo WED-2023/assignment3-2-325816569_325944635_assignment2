@@ -105,3 +105,16 @@ process.on("SIGINT", function () {
   }
   process.exit();
 });
+
+async function initializeDatabase() {
+  try {
+    await DButils.initializeTables();
+    console.log("Database tables initialized successfully.");
+  } catch (error) {
+    console.error("Error initializing database tables:", error);
+    process.exit(1); // Exit the process if table creation fails
+  }
+}
+
+// Call the function to initialize the database before starting the server
+initializeDatabase();

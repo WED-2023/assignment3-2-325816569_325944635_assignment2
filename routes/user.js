@@ -29,8 +29,8 @@ router.post('/favorites', async (req,res,next) => {
     const user_id = req.session.user_id;
     const recipe_id = req.body.recipeId;
     const source = req.body.source ? req.body.source.toLowerCase() : 'db'; // Default to 'db'
-    if (source !== 'db' && source !== 'spooncoolar') {
-      return res.status(400).send("Invalid source value. It must be 'db' or 'spooncoolar'.");
+    if (source !== 'db' && source !== 'spoonacular') {
+      return res.status(400).send("Invalid source value. It must be 'db' or 'spoonacular'.");
     }
     await user_utils.markAsFavorite(user_id,recipe_id,source);
     res.status(200).send("The Recipe successfully saved as favorite");

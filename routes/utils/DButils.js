@@ -68,8 +68,8 @@ exports.initializeTables = async function () {
       CREATE TABLE IF NOT EXISTS favorite_recipes (
         user_id INT NOT NULL,
         recipe_id INT NOT NULL,
-        source VARCHAR(255) NOT NULL DEFAULT 'db',
-        PRIMARY KEY (user_id, recipe_id,source),
+        is_DB INT NOT NULL DEFAULT 1,
+        PRIMARY KEY (user_id, recipe_id,is_DB),
         FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
       );
     `);
@@ -78,8 +78,9 @@ exports.initializeTables = async function () {
       CREATE TABLE IF NOT EXISTS viewed_recipes (
         user_id INT NOT NULL,
         recipe_id INT NOT NULL,
+        is_DB INT NOT NULL DEFAULT 1,
         view_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (user_id, recipe_id),
+        PRIMARY KEY (user_id, recipe_id,is_DB),
         FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
       );
     `);

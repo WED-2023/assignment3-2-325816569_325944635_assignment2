@@ -17,6 +17,16 @@ router.get("/:recipeId", async (req, res, next) => {
   }
 });
 
+router.get("/DB/:recipeId", async (req, res, next) => {
+  try {
+    const recipe = await recipes_utils.getRecipeDetailsFromDB(req.params.recipeId);
+    res.send(recipe);
+  } catch (error) {
+    next(error);
+  }
+});
+
+
 /**
  * This path allows a user to create a new recipe
  */

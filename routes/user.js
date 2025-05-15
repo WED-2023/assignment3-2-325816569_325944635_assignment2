@@ -28,9 +28,10 @@ router.post('/favorites', async (req, res, next) => {
   try {
     const user_id = req.session.user_id;
     const recipe_id = req.body.recipeId;
-    const is_DB = req.body.is_DB !== undefined ? parseInt(req.body.is_DB, 10) : 1; // Convert to number
-    if (is_DB !== 1 && is_DB !== 0) {
-      return res.status(400).send("Invalid value. It must be 1 for DB or 0 for 'spoonacular'.");
+    // Accept boolean for is_DB, default to true if not provided
+    const is_DB = typeof req.body.is_DB === "boolean" ? req.body.is_DB : true;
+    if (typeof is_DB !== "boolean") {
+      return res.status(400).send("Invalid value. It must be boolean true for DB or false for 'spoonacular'.");
     }
     await user_utils.markAsFavorite(user_id, recipe_id, is_DB);
     res.status(200).send("The Recipe successfully saved as favorite");
@@ -48,19 +49,20 @@ router.get('/favorites', async (req, res, next) => {
     const favoriteRecipes = await user_utils.getFavoriteRecipes(user_id);
 
     const dbRecipeIds = favoriteRecipes
-      .filter(r => r.is_DB === 1)
+      .filter(r => r.is_DB === true)
       .map(r => r.recipe_id);
 
     const spoonacularRecipeIds = favoriteRecipes
-      .filter(r => r.is_DB === 0)
+      .filter(r => r.is_DB === false)
       .map(r => r.recipe_id);
 
+    // Use getRecipePreview for each db recipe (single recipe per call)
     const dbRecipes = dbRecipeIds.length > 0
-      ? await recipe_utils.getRecipesPreview(dbRecipeIds)
+      ? await Promise.all(dbRecipeIds.map(id => recipe_utils.getRecipePreview(id)))
       : [];
 
     const spoonacularRecipes = spoonacularRecipeIds.length > 0 
-      ? await Promise.all(spoonacularRecipeIds.map(id => recipe_utils.getRecipeDetails(id)))
+      ? await Promise.all(spoonacularRecipeIds.map(id => recipe_utils.getAPIRecipePreview(id)))
       : [];
 
     res.status(200).send([...dbRecipes, ...spoonacularRecipes]);
@@ -76,7 +78,7 @@ router.get('/my-recipes', async (req, res, next) => {
     const myRecipesResult = await DButils.execQuery(`SELECT recipe_id FROM recipes WHERE created_by = ${user_id}`);
     const recipeIds = myRecipesResult.map(r => r.recipe_id);
     // Use getRecipesPreview to fetch recipe details
-    const myRecipes = recipeIds.length > 0 ? await recipe_utils.getRecipesPreview(recipeIds) : [];
+    const myRecipes = recipeIds.length > 0 ? await recipe_utils.getRecipePreview(recipeIds) : [];
     res.status(200).send(myRecipes);
   } catch (error) {
     next(error);

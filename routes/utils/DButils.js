@@ -36,12 +36,12 @@ exports.initializeTables = async function () {
       CREATE TABLE IF NOT EXISTS recipes (
         recipe_id INT AUTO_INCREMENT PRIMARY KEY,
         title VARCHAR(255) NOT NULL,
-        imageUrl VARCHAR(2083),
-        preparationTime INT,
-        likes INT DEFAULT 0,
-        isVegan BOOLEAN DEFAULT FALSE,
-        isVegetarian BOOLEAN DEFAULT FALSE,
-        isGlutenFree BOOLEAN DEFAULT FALSE,
+        image VARCHAR(2083),
+        readyInMinutes INT,
+        aggregateLikes INT DEFAULT 0,
+        vegan BOOLEAN DEFAULT FALSE,
+        vegetarian BOOLEAN DEFAULT FALSE,
+        glutenFree BOOLEAN DEFAULT FALSE,
         steps TEXT NOT NULL,
         created_by INT,
         FOREIGN KEY (created_by) REFERENCES users(user_id) ON DELETE CASCADE
@@ -51,7 +51,9 @@ exports.initializeTables = async function () {
     await MySql.query(`
       CREATE TABLE IF NOT EXISTS ingredients (
         ingredient_id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(255) NOT NULL UNIQUE
+        name VARCHAR(255) NOT NULL,
+        amount VARCHAR(255) NOT NULL,
+        UNIQUE KEY unique_ingredient (name, amount)
       );
     `);
 
@@ -68,8 +70,8 @@ exports.initializeTables = async function () {
       CREATE TABLE IF NOT EXISTS favorite_recipes (
         user_id INT NOT NULL,
         recipe_id INT NOT NULL,
-        is_DB INT NOT NULL DEFAULT 1,
-        PRIMARY KEY (user_id, recipe_id,is_DB),
+        is_DB BOOLEAN NOT NULL DEFAULT TRUE,
+        PRIMARY KEY (user_id, recipe_id, is_DB),
         FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
       );
     `);
@@ -78,9 +80,9 @@ exports.initializeTables = async function () {
       CREATE TABLE IF NOT EXISTS viewed_recipes (
         user_id INT NOT NULL,
         recipe_id INT NOT NULL,
-        is_DB INT NOT NULL DEFAULT 1,
+        is_DB BOOLEAN NOT NULL DEFAULT TRUE,
         view_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (user_id, recipe_id,is_DB),
+        PRIMARY KEY (user_id, recipe_id, is_DB),
         FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
       );
     `);

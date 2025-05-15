@@ -9,20 +9,24 @@ require("dotenv").config();
  * Get recipes list from spooncular response and extract the relevant recipe data for preview
  * @param {*} recipes_info 
  */
-
-
 async function getRecipeInformation(recipe_id) {
     return await axios.get(`${api_domain}/${recipe_id}/information`, {
         params: {
             includeNutrition: false,
-            apiKey: process.env.spooncular_apiKey
+            apiKey: process.env.spoonacular_apiKey
         }
     });
 }
 
 async function getRecipeDetails(recipe_id) {
     let recipe_info = await getRecipeInformation(recipe_id);
-    let { id, title, readyInMinutes, image, aggregateLikes, vegan, vegetarian, glutenFree } = recipe_info.data;
+    let { id, title, readyInMinutes, image, aggregateLikes, vegan, vegetarian, glutenFree, extendedIngredients, instructions } = recipe_info.data;
+
+    // Extract ingredients: list of { name, amount }
+    const ingredients = (extendedIngredients || []).map(ing => ({
+        name: ing.name,
+        amount: ing.amount
+    }));
 
     return {
         id: id,
@@ -33,7 +37,8 @@ async function getRecipeDetails(recipe_id) {
         vegan: vegan,
         vegetarian: vegetarian,
         glutenFree: glutenFree,
-        
+        ingredients: ingredients,
+        steps: instructions
     }
 }
 
@@ -43,56 +48,87 @@ async function getRecipeDetailsFromDB(recipe_id) {
     throw { status: 404, message: "Recipe not found" };
   }
   const ingredientsResult = await DButils.execQuery(`
-    SELECT name 
-    FROM ingredients 
+    SELECT name, amount
+    FROM ingredients
     WHERE ingredient_id IN (
-      SELECT ingredient_id 
-      FROM recipe_ingredients 
+      SELECT ingredient_id
+      FROM recipe_ingredients
       WHERE recipe_id = ${recipe_id}
     )
   `);
-  const { recipe_id: id, title, imageUrl, preparationTime, isVegan, isVegetarian, isGlutenFree } = recipe_info[0];
+  const { recipe_id: id, title, image, readyInMinutes, aggregateLikes, vegan, vegetarian, glutenFree, steps } = recipe_info[0];
   return {
-    id,
-    title,
-    readyInMinutes: preparationTime,
-    image: imageUrl,
-    vegan: isVegan,
-    vegetarian: isVegetarian,
-    glutenFree: isGlutenFree,
-    ingredients: ingredientsResult.map(ingredient => ingredient.name)
+    id: id,
+    title: title,
+    readyInMinutes: readyInMinutes,
+    image: image,
+    popularity: aggregateLikes,
+    vegan: !!vegan,
+    vegetarian: !!vegetarian,
+    glutenFree: !!glutenFree,
+    ingredients: ingredientsResult.map(ingredient => ({
+      name: ingredient.name,
+      amount: ingredient.amount
+    })),
+    steps: steps ? JSON.parse(steps) : []
   };
 }
 
-async function getRecipesPreview(recipeIds) {
+function extractRecipePreview(recipe) {
+  return {
+    id: recipe.id,
+    title: recipe.title,
+    readyInMinutes: recipe.readyInMinutes,
+    image: recipe.image,
+    aggregateLikes: recipe.aggregateLikes,
+    vegan: !!recipe.vegan,
+    vegetarian: !!recipe.vegetarian,
+    glutenFree: !!recipe.glutenFree
+  };
+}
+
+async function getRecipePreview(recipe_id) {
   try {
-    let query = `
-      SELECT recipe_id AS id, title, imageUrl, likes, isVegan, isVegetarian, isGlutenFree 
+    const query = `
+      SELECT recipe_id AS id, title, readyInMinutes, image, aggregateLikes, vegan, vegetarian, glutenFree
       FROM recipes
+      WHERE recipe_id = ?
     `;
-    if (recipeIds && recipeIds.length) {
-      if (recipeIds.length === 1) {
-        query += ` WHERE recipe_id = ${recipeIds[0]}`;
-      } else {
-        const idsStr = recipeIds.join(',');
-        query += ` WHERE recipe_id IN (${idsStr})`;
-      }
+    const recipesPreview = await DButils.execQuery(query.replace('?', recipe_id));
+    if (recipesPreview.length === 0) {
+      throw { status: 404, message: "Recipe not found" };
     }
-    const recipesPreview = await DButils.execQuery(query);
-    return recipesPreview;
+    return extractRecipePreview(recipesPreview[0]);
   } catch (error) {
-    console.error("Error fetching recipes preview:", error);
+    console.error("Error fetching recipe preview:", error);
     throw error;
   }
 }
 
+async function getAPIRecipePreview(recipe_id) {
+  let recipe_info = await getRecipeInformation(recipe_id);
+  return extractRecipePreview(recipe_info.data);
+}
 
-exports.getRecipesPreview = getRecipesPreview;
+async function getRandomRecipes() {
+  let response = await axios.get(`${api_domain}/random`, {
+        params: {
+            number: 3,
+            apiKey: process.env.spoonacular_apiKey
+        }
+    });
+  const result = [];
+  for (const recipe of response.data.recipes) {
+    result.push(extractRecipePreview(recipe));
+  }
+  return result;
+}
 
+
+exports.getRecipePreview = getRecipePreview;
 exports.getRecipeDetails = getRecipeDetails;
-
 exports.getRecipeDetailsFromDB = getRecipeDetailsFromDB;
-
+exports.getAPIRecipePreview = getAPIRecipePreview;
 exports.getRandomRecipes = getRandomRecipes;
 
 

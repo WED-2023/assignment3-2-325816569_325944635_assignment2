@@ -6,9 +6,9 @@ const DButils = require("./utils/DButils"); // Re-import DButils
 router.get("/", (req, res) => res.send("im here"));
 
 /**
- * This path returns a full details of a recipe by its id
+ * This path returns a full details of a recipe by its id (only if recipeId is an integer)
  */
-router.get("/:recipeId", async (req, res, next) => {
+router.get("/:recipeId(\\d+)", async (req, res, next) => {
   try {
     const recipe = await recipes_utils.getRecipeDetails(req.params.recipeId);
     res.send(recipe);
@@ -26,7 +26,6 @@ router.get("/DB/:recipeId", async (req, res, next) => {
   }
 });
 
-
 /**
  * This path allows a user to create a new recipe
  */
@@ -37,29 +36,40 @@ router.post("/create", async (req, res, next) => {
       return res.status(401).send({ message: "Unauthorized – user must be logged in" });
     }
 
-    const { title, imageUrl, preparationTime, isVegan, isVegetarian, isGlutenFree, ingredients, steps } = req.body;
+    let { title, image, readyInMinutes, aggregateLikes, vegan, vegetarian, glutenFree, ingredients, steps } = req.body;
 
     // Validate required fields
     if (!title || !ingredients || !steps) {
       return res.status(400).send({ message: "Invalid input data" });
     }
 
+    // Ensure boolean values
+    vegan = !!vegan;
+    vegetarian = !!vegetarian;
+    glutenFree = !!glutenFree;
+
     // Insert the recipe into the recipes table
     const recipeResult = await DButils.execQuery(`
-      INSERT INTO recipes (title, imageUrl, preparationTime, isVegan, isVegetarian, isGlutenFree, steps, created_by)
-      VALUES ('${title}', '${imageUrl}', ${preparationTime || null}, ${isVegan || false}, ${isVegetarian || false}, ${isGlutenFree || false}, '${JSON.stringify(steps)}', ${user_id});
+      INSERT INTO recipes (title, image, readyInMinutes, aggregateLikes, vegan, vegetarian, glutenFree, steps, created_by)
+      VALUES ('${title}', '${image}', ${readyInMinutes || null}, ${aggregateLikes || 0}, ${vegan}, ${vegetarian}, ${glutenFree}, '${JSON.stringify(steps)}', ${user_id});
     `);
 
     const recipe_id = recipeResult.insertId;
 
     // Insert ingredients into the ingredients and recipe_ingredients tables
     for (const ingredient of ingredients) {
+      // ingredient should be an object: { name, amount }
+      const name = ingredient.name;
+      const amount = ingredient.amount;
+
+      // Insert ingredient if not exists (by name and amount)
       let ingredientResult = await DButils.execQuery(`
-        INSERT IGNORE INTO ingredients (name) VALUES ('${ingredient}');
+        INSERT IGNORE INTO ingredients (name, amount) VALUES ('${name}', '${amount}');
       `);
 
+      // Get the ingredient_id for this name and amount
       const ingredient_id = ingredientResult.insertId || (
-        await DButils.execQuery(`SELECT ingredient_id FROM ingredients WHERE name='${ingredient}'`)
+        await DButils.execQuery(`SELECT ingredient_id FROM ingredients WHERE name='${name}' AND amount='${amount}'`)
       )[0].ingredient_id;
 
       await DButils.execQuery(`
@@ -68,6 +78,18 @@ router.post("/create", async (req, res, next) => {
     }
 
     res.status(201).send({ message: "Recipe created successfully", recipe_id });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * This path returns 3 random recipes from Spoonacular
+ */
+router.get("/random", async (req, res, next) => {
+  try {
+    const recipes = await recipes_utils.getRandomRecipes();
+    res.send(recipes);
   } catch (error) {
     next(error);
   }

@@ -85,4 +85,39 @@ router.get('/my-recipes', async (req, res, next) => {
   }
 });
 
+router.get('/viewed-recipes', async (req, res, next) => {
+  try {
+    const user_id = req.session.user_id;
+    // Get all recipe IDs and their source flag (is_DB) viewed by the user
+    const viewedRecipesResult = await DButils.execQuery(`
+      SELECT recipe_id, is_DB
+      FROM viewed_recipes
+      WHERE user_id = ${user_id}
+      ORDER BY view_date DESC
+      LIMIT 3
+    `);
+    // Separate DB recipes and API recipes based on the is_DB flag
+    const dbRecipeIds = viewedRecipesResult
+      .filter(recipe => recipe.is_DB)
+      .map(recipe => recipe.recipe_id);
+      
+    const apiRecipeIds = viewedRecipesResult
+      .filter(recipe => !recipe.is_DB)
+      .map(recipe => recipe.recipe_id);
+      
+    // Fetch details for DB recipes and API recipes respectively
+    const dbRecipes = dbRecipeIds.length > 0
+      ? await Promise.all(dbRecipeIds.map(id => recipe_utils.getRecipePreview(id)))
+      : [];
+      
+    const apiRecipes = apiRecipeIds.length > 0
+      ? await Promise.all(apiRecipeIds.map(id => recipe_utils.getAPIRecipePreview(id)))
+      : [];
+      
+    res.status(200).send([...dbRecipes, ...apiRecipes]);
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;

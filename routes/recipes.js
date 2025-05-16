@@ -11,6 +11,10 @@ router.get("/", (req, res) => res.send("im here"));
 router.get("/:recipeId(\\d+)", async (req, res, next) => {
   try {
     const recipe = await recipes_utils.getRecipeDetails(req.params.recipeId);
+    // Mark the recipe as viewed (API recipe -> is_DB = 0)
+    if (req.session && req.session.user_id) {
+      await require("./utils/user_utils").markAsViewed(req.session.user_id, req.params.recipeId, 0);
+    }
     res.send(recipe);
   } catch (error) {
     next(error);
@@ -20,6 +24,10 @@ router.get("/:recipeId(\\d+)", async (req, res, next) => {
 router.get("/DB/:recipeId", async (req, res, next) => {
   try {
     const recipe = await recipes_utils.getRecipeDetailsFromDB(req.params.recipeId);
+    // Mark the recipe as viewed (DB recipe -> is_DB = 1)
+    if (req.session && req.session.user_id) {
+      await require("./utils/user_utils").markAsViewed(req.session.user_id, req.params.recipeId, 1);
+    }
     res.send(recipe);
   } catch (error) {
     next(error);
@@ -89,6 +97,20 @@ router.post("/create", async (req, res, next) => {
 router.get("/random", async (req, res, next) => {
   try {
     const recipes = await recipes_utils.getRandomRecipes();
+    res.send(recipes);
+  } catch (error) {
+    next(error);
+  }
+});
+
+
+router.get("/search", async (req, res, next) => {
+  try {
+    const { query, number, cuisine, diet, intolerances } = req.query;
+    const recipes = await recipes_utils.searchRecipes(query, number, cuisine, diet, intolerances);
+    if (!recipes || recipes.length === 0) {
+      return res.status(404).send({ message: "No recipes found" });
+    }
     res.send(recipes);
   } catch (error) {
     next(error);

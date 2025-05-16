@@ -1,3 +1,4 @@
+const { Time } = require("mssql");
 const DButils = require("./DButils");
 
 async function markAsFavorite(user_id, recipe_id, is_DB = true) {
@@ -20,6 +21,14 @@ async function getFavoriteRecipes(user_id) {
   }));
 }
 
+async function markAsViewed(user_id, recipe_id, is_DB) {
+  await DButils.execQuery(`
+    INSERT IGNORE INTO viewed_recipes (user_id, recipe_id, is_DB, view_date)
+    VALUES ('${user_id}', ${recipe_id}, ${is_DB}, NOW())
+  `);
+}
+
 
 exports.markAsFavorite = markAsFavorite;
 exports.getFavoriteRecipes = getFavoriteRecipes;
+exports.markAsViewed = markAsViewed;

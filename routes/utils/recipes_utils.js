@@ -124,11 +124,36 @@ async function getRandomRecipes() {
   return result;
 }
 
+async function searchRecipes(query, number = 5, cuisine, diet, intolerances) {
+  const params = {
+    query,
+    number,
+    addRecipeInformation: true,
+    apiKey: process.env.spoonacular_apiKey
+  };
+  if (cuisine) {
+    params.cuisine = cuisine;
+  }
+  if (diet) {
+    params.diet = diet;
+  }
+  if (intolerances) {
+    params.intolerances = intolerances;
+  }
+  const response = await axios.get(`${api_domain}/complexSearch`, { params });
+  if (!response.data || !response.data.results) {
+    throw new Error("Invalid response from Spoonacular API");
+  }
+  return response.data.results.map(recipe => extractRecipePreview(recipe));
+}
+
+
+
 
 exports.getRecipePreview = getRecipePreview;
 exports.getRecipeDetails = getRecipeDetails;
 exports.getRecipeDetailsFromDB = getRecipeDetailsFromDB;
 exports.getAPIRecipePreview = getAPIRecipePreview;
 exports.getRandomRecipes = getRandomRecipes;
-
+exports.searchRecipes = searchRecipes;
 

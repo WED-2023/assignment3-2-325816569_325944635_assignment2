@@ -147,8 +147,50 @@ async function searchRecipes(query, number = 5, cuisine, diet, intolerances) {
   return response.data.results.map(recipe => extractRecipePreview(recipe));
 }
 
+async function createRecipe(user_id, body) {
+  let { title, image, readyInMinutes, aggregateLikes, vegan, vegetarian, glutenFree, ingredients, steps } = body;
 
+  // Validate required fields
+  if (!title || !ingredients || !steps) {
+    throw { status: 400, message: "Invalid input data" };
+  }
 
+  // Ensure boolean values
+  vegan = !!vegan;
+  vegetarian = !!vegetarian;
+  glutenFree = !!glutenFree;
+
+  // Insert the recipe into the recipes table
+  const recipeResult = await DButils.execQuery(`
+    INSERT INTO recipes (title, image, readyInMinutes, aggregateLikes, vegan, vegetarian, glutenFree, steps, created_by)
+    VALUES ('${title}', '${image}', ${readyInMinutes || null}, ${aggregateLikes || 0}, ${vegan}, ${vegetarian}, ${glutenFree}, '${JSON.stringify(steps)}', ${user_id});
+  `);
+
+  const recipe_id = recipeResult.insertId;
+
+  // Insert ingredients into the ingredients and recipe_ingredients tables
+  for (const ingredient of ingredients) {
+    // ingredient should be an object: { name, amount }
+    const name = ingredient.name;
+    const amount = ingredient.amount;
+
+    // Insert ingredient if not exists (by name and amount)
+    let ingredientResult = await DButils.execQuery(`
+      INSERT IGNORE INTO ingredients (name, amount) VALUES ('${name}', '${amount}');
+    `);
+
+    // Get the ingredient_id for this name and amount
+    const ingredient_id = ingredientResult.insertId || (
+      await DButils.execQuery(`SELECT ingredient_id FROM ingredients WHERE name='${name}' AND amount='${amount}'`)
+    )[0].ingredient_id;
+
+    await DButils.execQuery(`
+      INSERT INTO recipe_ingredients (recipe_id, ingredient_id) VALUES (${recipe_id}, ${ingredient_id});
+    `);
+  }
+
+  return recipe_id;
+}
 
 exports.getRecipePreview = getRecipePreview;
 exports.getRecipeDetails = getRecipeDetails;
@@ -156,4 +198,5 @@ exports.getRecipeDetailsFromDB = getRecipeDetailsFromDB;
 exports.getAPIRecipePreview = getAPIRecipePreview;
 exports.getRandomRecipes = getRandomRecipes;
 exports.searchRecipes = searchRecipes;
+exports.createRecipe = createRecipe;
 

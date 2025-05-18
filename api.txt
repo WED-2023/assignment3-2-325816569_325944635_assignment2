@@ -1,0 +1,528 @@
+openapi: 3.0.0
+info:
+  version: "1.0.0"
+  title: Recipe API
+  description: API for recipe project
+servers:
+  - url: http://localhost:80
+paths:
+  /:
+    get:
+      tags:
+        - Main
+      summary: Get main page data
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: string
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /recipes/random:
+    get:
+      tags:
+        - Recipes
+      summary: Get random recipes
+      parameters:
+        - name: count
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 3
+      responses:
+        '200':
+          description: A list of random recipes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecipePreview'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /recipes/search:
+    get:
+      tags:
+        - Recipes
+      summary: Search for recipes by name or desired dish
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: number
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 5
+        - name: cuisine
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: diet
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: intolerances
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A list of matching recipe previews
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecipePreview'
+        '400':
+          description: Invalid parameters
+
+  /recipes/create:
+    post:
+      tags:
+        - Recipes
+      summary: Create a new recipe
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FullRecipeInput'
+      responses:
+        '201':
+          description: Recipe created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  recipe_id:
+                    type: integer
+        '400':
+          description: Invalid input data
+        '401':
+          description: Unauthorized – user must be logged in
+
+  /recipes/{recipeId}:
+    get:
+      tags:
+        - Recipes
+      summary: Get recipe details from Spoonacular by ID
+      parameters:
+        - name: recipeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Recipe details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipeDetails'
+        '404':
+          description: Recipe not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /recipes/DB/{recipeId}:
+    get:
+      tags:
+        - Recipes
+      summary: Get recipe details from DB by ID
+      parameters:
+        - name: recipeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Recipe details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipeDetails'
+        '404':
+          description: Recipe not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/favorites:
+    get:
+      tags:
+        - User
+      summary: Get user's favorite recipes
+      responses:
+        '200':
+          description: List of favorite recipes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecipePreview'
+        '401':
+          description: Unauthorized – user must be logged in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags:
+        - User
+      summary: Add a recipe to favorites
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                recipeId:
+                  type: integer
+                is_DB:
+                  type: boolean
+      responses:
+        '200':
+          description: The Recipe successfully saved as favorite
+        '401':
+          description: Unauthorized – user must be logged in
+
+  /users/my-recipes:
+    get:
+      tags:
+        - User
+      summary: Get user's created recipes
+      responses:
+        '200':
+          description: List of user's created recipes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecipePreview'
+        '401':
+          description: Unauthorized – user must be logged in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/viewed-recipes:
+    get:
+      tags:
+        - User
+      summary: Get user viewed recipes
+      responses:
+        '200':
+          description: List of viewed recipes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecipePreview'
+        '401':
+          description: Unauthorized – user must be logged in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/family:
+    get:
+      tags:
+        - User
+      summary: Get user's family recipes
+      responses:
+        '200':
+          description: List of family recipes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecipePreview'
+        '401':
+          description: Unauthorized – user must be logged in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags:
+        - User
+      summary: Add a family relationship
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+      responses:
+        '201':
+          description: Family relationship added successfully
+        '400':
+          description: Bad request
+        '404':
+          description: User not found
+
+  /auth/Register:
+    post:
+      tags:
+        - Authentication
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+                - email
+              properties:
+                username:
+                  type: string
+                firstname:
+                  type: string
+                lastname:
+                  type: string
+                country:
+                  type: string
+                password:
+                  type: string
+                  format: password
+                email:
+                  type: string
+                  format: email
+                profilePic:
+                  type: string
+                  format: uri
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Username taken
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/Login:
+    post:
+      tags:
+        - Authentication
+      summary: Log in a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/Logout:
+    post:
+      tags:
+        - Authentication
+      summary: Log out the current user
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+
+components:
+  schemas:
+    RecipePreview:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        image:
+          type: string
+        readyInMinutes:
+          type: integer
+        aggregateLikes:
+          type: integer
+        vegan:
+          type: boolean
+        vegetarian:
+          type: boolean
+        glutenFree:
+          type: boolean
+
+    RecipeDetails:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        readyInMinutes:
+          type: integer
+        image:
+          type: string
+        popularity:
+          type: integer
+        vegan:
+          type: boolean
+        vegetarian:
+          type: boolean
+        glutenFree:
+          type: boolean
+        ingredients:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              amount:
+                type: string
+        steps:
+          type: array
+          items:
+            type: string
+
+    FullRecipeInput:
+      type: object
+      required:
+        - title
+        - image
+        - readyInMinutes
+        - vegan
+        - vegetarian
+        - glutenFree
+        - ingredients
+        - steps
+      properties:
+        title:
+          type: string
+        image:
+          type: string
+        readyInMinutes:
+          type: integer
+        aggregateLikes:
+          type: integer
+        vegan:
+          type: boolean
+        vegetarian:
+          type: boolean
+        glutenFree:
+          type: boolean
+        ingredients:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              amount:
+                type: string
+        steps:
+          type: array
+          items:
+            type: string
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+        code:
+          type: integer
+
+tags:
+  - name: Main
+    description: Main page endpoint
+  - name: Recipes
+    description: Endpoints related to recipe content
+  - name: User
+    description: User-specific data like viewed recipes and favorites
+  - name: Authentication
+    description: Registration and login endpoints

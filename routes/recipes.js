@@ -20,10 +20,16 @@ router.get("/random", async (req, res, next) => {
  */
 router.get("/search", async (req, res, next) => {
   try {
-    const { query, number, cuisine, diet, intolerances } = req.body;
+    const { query, number, cuisine, diet, intolerances,sortByLikes,sortByTime} = req.body;
     const recipes = await recipes_utils.searchRecipes(query, number, cuisine, diet, intolerances);
     if (!recipes || recipes.length === 0) {
       return res.status(404).send({ message: "No recipes found" });
+    }
+    if (sortByLikes) {
+      recipes.sort((a, b) => b.aggregateLikes - a.aggregateLikes);
+    }
+    if (sortByTime) {
+      recipes.sort((a, b) => a.readyInMinutes - b.readyInMinutes);
     }
     res.send(recipes);
   } catch (error) {

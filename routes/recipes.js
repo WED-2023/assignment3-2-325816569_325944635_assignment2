@@ -106,7 +106,7 @@ router.get("/random", async (req, res, next) => {
 
 router.get("/search", async (req, res, next) => {
   try {
-    const { query, number, cuisine, diet, intolerances } = req.query;
+    const { query, number, cuisine, diet, intolerances } = req.body;
     const recipes = await recipes_utils.searchRecipes(query, number, cuisine, diet, intolerances);
     if (!recipes || recipes.length === 0) {
       return res.status(404).send({ message: "No recipes found" });

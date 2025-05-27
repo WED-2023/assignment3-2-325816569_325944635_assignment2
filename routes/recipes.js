@@ -20,16 +20,10 @@ router.get("/random", async (req, res, next) => {
  */
 router.get("/search", async (req, res, next) => {
   try {
-    const { query, number, cuisine, diet, intolerances,sortByLikes,sortByTime} = req.body;
+    const { query, number, cuisine, diet, intolerances } = req.body;
     const recipes = await recipes_utils.searchRecipes(query, number, cuisine, diet, intolerances);
     if (!recipes || recipes.length === 0) {
       return res.status(404).send({ message: "No recipes found" });
-    }
-    if (sortByLikes) {
-      recipes.sort((a, b) => b.aggregateLikes - a.aggregateLikes);
-    }
-    if (sortByTime) {
-      recipes.sort((a, b) => a.readyInMinutes - b.readyInMinutes);
     }
     res.send(recipes);
   } catch (error) {
@@ -78,6 +72,23 @@ router.post("/create", async (req, res, next) => {
     }
     const recipe_id = await recipes_utils.createRecipe(user_id, req.body);
     res.status(201).send({ message: "Recipe created successfully", recipe_id });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Set the number of likes for a recipe (DB or Spoonacular)
+ */
+router.post("/set-likes/:recipeId", async (req, res, next) => {
+  try {
+    const recipeId = req.params.recipeId;
+    const { likes, is_DB } = req.body;
+    if (typeof likes !== "number" || typeof is_DB !== "boolean") {
+      return res.status(400).send({ message: "likes (number) and is_DB (boolean) are required" });
+    }
+    await recipes_utils.setRecipeLikes(recipeId, is_DB, likes);
+    res.status(200).send({ message: "Likes updated successfully" });
   } catch (error) {
     next(error);
   }

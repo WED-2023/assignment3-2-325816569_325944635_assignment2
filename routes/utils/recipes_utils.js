@@ -5,6 +5,13 @@ require("dotenv").config();
 
 
 
+async function getRecipeLikes(recipe_id, is_DB) {
+  const result = await DButils.execQuery(
+    `SELECT likes FROM popularity WHERE recipe_id = ${recipe_id} AND is_DB = ${is_DB ? 1 : 0}`
+  );
+  return result.length > 0 ? result[0].likes : 0;
+}
+
 /**
  * Get recipes list from spooncular response and extract the relevant recipe data for preview
  * @param {*} recipes_info 
@@ -22,6 +29,10 @@ async function getRecipeDetails(recipe_id) {
     let recipe_info = await getRecipeInformation(recipe_id);
     let { id, title, readyInMinutes, image, aggregateLikes, vegan, vegetarian, glutenFree, extendedIngredients, instructions } = recipe_info.data;
 
+    // Get likes from DB for this spoonacular recipe
+    const dbLikes = await getRecipeLikes(id, false);
+    const popularity = aggregateLikes + dbLikes;
+
     // Extract ingredients: list of { name, amount }
     const ingredients = (extendedIngredients || []).map(ing => ({
         name: ing.name,
@@ -33,7 +44,7 @@ async function getRecipeDetails(recipe_id) {
         title: title,
         readyInMinutes: readyInMinutes,
         image: image,
-        popularity: aggregateLikes,
+        popularity: popularity,
         vegan: vegan,
         vegetarian: vegetarian,
         glutenFree: glutenFree,
@@ -56,13 +67,14 @@ async function getRecipeDetailsFromDB(recipe_id) {
       WHERE recipe_id = ${recipe_id}
     )
   `);
-  const { recipe_id: id, title, image, readyInMinutes, aggregateLikes, vegan, vegetarian, glutenFree, steps } = recipe_info[0];
+  const { recipe_id: id, title, image, readyInMinutes, vegan, vegetarian, glutenFree, steps } = recipe_info[0];
+  const popularity = await getRecipeLikes(id, true);
   return {
     id: id,
     title: title,
     readyInMinutes: readyInMinutes,
     image: image,
-    popularity: aggregateLikes,
+    popularity: popularity,
     vegan: !!vegan,
     vegetarian: !!vegetarian,
     glutenFree: !!glutenFree,
@@ -74,13 +86,13 @@ async function getRecipeDetailsFromDB(recipe_id) {
   };
 }
 
-function extractRecipePreview(recipe) {
+function extractRecipePreview(recipe, popularity) {
   return {
     id: recipe.id,
     title: recipe.title,
     readyInMinutes: recipe.readyInMinutes,
     image: recipe.image,
-    aggregateLikes: recipe.aggregateLikes,
+    popularity: popularity,
     vegan: !!recipe.vegan,
     vegetarian: !!recipe.vegetarian,
     glutenFree: !!recipe.glutenFree
@@ -90,7 +102,7 @@ function extractRecipePreview(recipe) {
 async function getRecipePreview(recipe_id) {
   try {
     const query = `
-      SELECT recipe_id AS id, title, readyInMinutes, image, aggregateLikes, vegan, vegetarian, glutenFree
+      SELECT recipe_id AS id, title, readyInMinutes, image, vegan, vegetarian, glutenFree
       FROM recipes
       WHERE recipe_id = ?
     `;
@@ -98,7 +110,8 @@ async function getRecipePreview(recipe_id) {
     if (recipesPreview.length === 0) {
       throw { status: 404, message: "Recipe not found" };
     }
-    return extractRecipePreview(recipesPreview[0]);
+    const popularity = await getRecipeLikes(recipe_id, true);
+    return extractRecipePreview(recipesPreview[0], popularity);
   } catch (error) {
     console.error("Error fetching recipe preview:", error);
     throw error;
@@ -107,7 +120,9 @@ async function getRecipePreview(recipe_id) {
 
 async function getAPIRecipePreview(recipe_id) {
   let recipe_info = await getRecipeInformation(recipe_id);
-  return extractRecipePreview(recipe_info.data);
+  const dbLikes = await getRecipeLikes(recipe_info.data.id, false);
+  const popularity = (recipe_info.data.aggregateLikes || 0) + dbLikes;
+  return extractRecipePreview(recipe_info.data, popularity);
 }
 
 async function getRandomRecipes() {
@@ -119,7 +134,9 @@ async function getRandomRecipes() {
     });
   const result = [];
   for (const recipe of response.data.recipes) {
-    result.push(extractRecipePreview(recipe));
+    const dbLikes = await getRecipeLikes(recipe.id, false);
+    const popularity = (recipe.aggregateLikes || 0) + dbLikes;
+    result.push(extractRecipePreview(recipe, popularity));
   }
   return result;
 }
@@ -144,7 +161,12 @@ async function searchRecipes(query, number = 5, cuisine, diet, intolerances) {
   if (!response.data || !response.data.results) {
     throw new Error("Invalid response from Spoonacular API");
   }
-  return response.data.results.map(recipe => extractRecipePreview(recipe));
+  // For each recipe, get aggregateLikes + likes from DB
+  return await Promise.all(response.data.results.map(async recipe => {
+    const dbLikes = await getRecipeLikes(recipe.id, false);
+    const popularity = (recipe.aggregateLikes || 0) + dbLikes;
+    return extractRecipePreview(recipe, popularity);
+  }));
 }
 
 async function createRecipe(user_id, body) {
@@ -162,11 +184,18 @@ async function createRecipe(user_id, body) {
 
   // Insert the recipe into the recipes table
   const recipeResult = await DButils.execQuery(`
-    INSERT INTO recipes (title, image, readyInMinutes, aggregateLikes, vegan, vegetarian, glutenFree, steps, created_by)
-    VALUES ('${title}', '${image}', ${readyInMinutes || null}, ${aggregateLikes || 0}, ${vegan}, ${vegetarian}, ${glutenFree}, '${JSON.stringify(steps)}', ${user_id});
+    INSERT INTO recipes (title, image, readyInMinutes, vegan, vegetarian, glutenFree, steps, created_by)
+    VALUES ('${title}', '${image}', ${readyInMinutes || null}, ${vegan}, ${vegetarian}, ${glutenFree}, '${JSON.stringify(steps)}', ${user_id});
   `);
 
   const recipe_id = recipeResult.insertId;
+
+  // Insert likes into popularity table for new DB recipe (default 0)
+  await DButils.execQuery(`
+    INSERT INTO popularity (recipe_id, likes, is_DB)
+    VALUES (${recipe_id}, ${aggregateLikes || 0}, 1)
+    ON DUPLICATE KEY UPDATE likes = likes
+  `);
 
   // Insert ingredients into the ingredients and recipe_ingredients tables
   for (const ingredient of ingredients) {
@@ -192,6 +221,14 @@ async function createRecipe(user_id, body) {
   return recipe_id;
 }
 
+async function setRecipeLikes(recipe_id, is_DB, likes) {
+  await DButils.execQuery(`
+    INSERT INTO popularity (recipe_id, likes, is_DB)
+    VALUES (${recipe_id}, ${likes}, ${is_DB ? 1 : 0})
+    ON DUPLICATE KEY UPDATE likes = ${likes}
+  `);
+}
+
 exports.getRecipePreview = getRecipePreview;
 exports.getRecipeDetails = getRecipeDetails;
 exports.getRecipeDetailsFromDB = getRecipeDetailsFromDB;
@@ -199,4 +236,5 @@ exports.getAPIRecipePreview = getAPIRecipePreview;
 exports.getRandomRecipes = getRandomRecipes;
 exports.searchRecipes = searchRecipes;
 exports.createRecipe = createRecipe;
+exports.setRecipeLikes = setRecipeLikes;
 

@@ -16,11 +16,13 @@ router.get("/random", async (req, res, next) => {
 });
 
 /**
- * Search recipes from Spoonacular
+ * Search recipes from Spoonacular using GET with query parameters
  */
 router.get("/search", async (req, res, next) => {
   try {
-    const { query, number, cuisine, diet, intolerances } = req.body;
+    const { query, number, cuisine, diet, intolerances } = req.query;
+    console.log("Search request received with query params:", req.query);
+    
     const recipes = await recipes_utils.searchRecipes(query, number, cuisine, diet, intolerances);
     if (!recipes || recipes.length === 0) {
       return res.status(404).send({ message: "No recipes found" });

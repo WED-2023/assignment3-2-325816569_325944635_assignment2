@@ -36,6 +36,27 @@ router.get('/favorites', async (req, res, next) => {
 });
 
 /**
+ * Check if a recipe is in favorites
+ */
+router.get('/favorites/:recipeId', async (req, res, next) => {
+  try {
+    const user_id = req.session.user_id;
+    const recipe_id = req.params.recipeId;
+    // Parse is_DB as boolean (fix for inconsistent handling)
+    const is_DB = req.query.is_DB === 'true' || req.query.is_DB === true;
+    
+    console.log(`Checking if recipe ${recipe_id} is favorite (is_DB: ${is_DB}) for user ${user_id}`);
+    
+    const isFavorite = await user_utils.isRecipeFavorite(user_id, recipe_id, is_DB);
+    console.log(`Result: ${isFavorite}`);
+    
+    res.status(200).send({ isFavorite });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * Get recipes created by the logged-in user
  */
 router.get('/my-recipes', async (req, res, next) => {
@@ -62,23 +83,27 @@ router.get('/viewed-recipes', async (req, res, next) => {
 });
 
 /**
- * Add a family relationship between the logged-in user and another user by username
+ * Add a family recipe
  */
-router.post('/family', async (req, res, next) => {
+router.post('/family-recipes', async (req, res, next) => {
   try {
     const user_id = req.session.user_id;
-    const { username } = req.body;
-    await user_utils.addFamilyRelationship(user_id, username);
-    res.status(201).send({ message: "Family relationship added successfully" });
+    const recipeData = req.body;
+    
+    const recipe_id = await user_utils.addFamilyRecipe(user_id, recipeData);
+    res.status(201).send({ 
+      message: "Family recipe added successfully", 
+      recipe_id: recipe_id 
+    });
   } catch (error) {
     next(error);
   }
 });
 
 /**
- * Get all recipes created by the user's family members
+ * Get all family recipes for the logged-in user
  */
-router.get('/family', async (req, res, next) => {
+router.get('/family-recipes', async (req, res, next) => {
   try {
     const user_id = req.session.user_id;
     const familyRecipes = await user_utils.getFamilyRecipes(user_id);

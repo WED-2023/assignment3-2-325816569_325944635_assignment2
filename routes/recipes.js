@@ -8,7 +8,9 @@ const recipes_utils = require("./utils/recipes_utils");
  */
 router.get("/random", async (req, res, next) => {
   try {
-    const recipes = await recipes_utils.getRandomRecipes();
+    // Pass user_id if user is logged in
+    const user_id = req.session && req.session.user_id ? req.session.user_id : null;
+    const recipes = await recipes_utils.getRandomRecipes(user_id);
     res.send(recipes);
   } catch (error) {
     next(error);
@@ -21,9 +23,11 @@ router.get("/random", async (req, res, next) => {
 router.get("/search", async (req, res, next) => {
   try {
     const { query, number, cuisine, diet, intolerances } = req.query;
+    const user_id = req.session && req.session.user_id ? req.session.user_id : null;
+    
     console.log("Search request received with query params:", req.query);
     
-    const recipes = await recipes_utils.searchRecipes(query, number, cuisine, diet, intolerances);
+    const recipes = await recipes_utils.searchRecipes(query, number, cuisine, diet, intolerances, user_id);
     if (!recipes || recipes.length === 0) {
       return res.status(404).send({ message: "No recipes found" });
     }

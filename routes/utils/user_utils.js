@@ -34,6 +34,21 @@ async function markAsFavorite(user_id, recipe_id, is_DB = true) {
 }
 
 /**
+ * Check if a recipe is in user's favorites
+ */
+async function isRecipeFavorite(user_id, recipe_id, is_DB) {
+  if (!user_id) return false;
+  
+  const result = await DButils.execQuery(
+    `SELECT 1 FROM favorite_recipes 
+     WHERE user_id = ${user_id} 
+     AND recipe_id = ${recipe_id} 
+     AND is_DB = ${is_DB ? 1 : 0}`
+  );
+  return result.length > 0;
+}
+
+/**
  * Get favorite recipes for a user
  */
 async function getFavoriteRecipes(user_id) {
@@ -63,11 +78,11 @@ async function getFavoriteRecipesPreview(user_id) {
     .map(r => r.recipe_id);
 
   const dbRecipes = dbRecipeIds.length > 0
-    ? await Promise.all(dbRecipeIds.map(id => recipe_utils.getRecipePreview(id)))
+    ? await Promise.all(dbRecipeIds.map(id => recipe_utils.getRecipePreview(id, user_id)))
     : [];
 
   const spoonacularRecipes = spoonacularRecipeIds.length > 0 
-    ? await Promise.all(spoonacularRecipeIds.map(id => recipe_utils.getAPIRecipePreview(id)))
+    ? await Promise.all(spoonacularRecipeIds.map(id => recipe_utils.getAPIRecipePreview(id, user_id)))
     : [];
 
   return [...dbRecipes, ...spoonacularRecipes];
@@ -101,68 +116,127 @@ async function getViewedRecipesPreview(user_id) {
     .filter(recipe => !recipe.is_DB)
     .map(recipe => recipe.recipe_id);
 
+  // Pass user_id to properly check both viewed and favorite status
   const dbRecipes = dbRecipeIds.length > 0
-    ? await Promise.all(dbRecipeIds.map(id => recipe_utils.getRecipePreview(id)))
+    ? await Promise.all(dbRecipeIds.map(id => recipe_utils.getRecipePreview(id, user_id)))
     : [];
 
   const apiRecipes = apiRecipeIds.length > 0
-    ? await Promise.all(apiRecipeIds.map(id => recipe_utils.getAPIRecipePreview(id)))
+    ? await Promise.all(apiRecipeIds.map(id => recipe_utils.getAPIRecipePreview(id, user_id)))
     : [];
 
   return [...dbRecipes, ...apiRecipes];
 }
 
 /**
- * Add a family relationship (both directions)
+ * Add a family recipe for a user
  */
-async function addFamilyRelationship(user_id_1, username) {
-  const users = await DButils.execQuery(`SELECT user_id FROM users WHERE username = '${username}'`);
-  if (users.length === 0) {
-    throw { status: 404, message: "User not found" };
-  }
-  const user_id_2 = users[0].user_id;
+async function addFamilyRecipe(user_id, recipeData) {
+  const { 
+    family_member, 
+    title, 
+    image, 
+    readyInMinutes, 
+    servings,
+    vegan, 
+    vegetarian, 
+    glutenFree, 
+    ingredients, 
+    steps 
+  } = recipeData;
 
-  if (user_id_1 === user_id_2) {
-    throw { status: 400, message: "Cannot add yourself as family" };
+  // Validate required fields
+  if (!family_member || !title || !ingredients || !steps) {
+    throw { status: 400, message: "Missing required fields" };
   }
 
-  await DButils.execQuery(`
-    INSERT IGNORE INTO family_ties (user_id_1, user_id_2)
-    VALUES (${user_id_1}, ${user_id_2})
+  // Convert boolean values
+  const veganValue = vegan ? 1 : 0;
+  const vegetarianValue = vegetarian ? 1 : 0;
+  const glutenFreeValue = glutenFree ? 1 : 0;
+
+  // Escape special characters to prevent SQL injection
+  const escapedFamilyMember = family_member.replace(/'/g, "\\'");
+  const escapedTitle = title.replace(/'/g, "\\'");
+  const escapedImage = image ? image.replace(/'/g, "\\'") : '';
+  const escapedSteps = JSON.stringify(steps).replace(/'/g, "\\'");
+
+  // Insert family recipe using string interpolation
+  const result = await DButils.execQuery(`
+    INSERT INTO family_recipes (
+      user_id, family_member, title, image, readyInMinutes, servings, 
+      vegan, vegetarian, glutenFree, steps
+    ) VALUES (
+      ${user_id}, '${escapedFamilyMember}', '${escapedTitle}', '${escapedImage}', ${readyInMinutes || 0}, ${servings || 1},
+      ${veganValue}, ${vegetarianValue}, ${glutenFreeValue}, '${escapedSteps}'
+    )
   `);
 
-  await DButils.execQuery(`
-    INSERT IGNORE INTO family_ties (user_id_1, user_id_2)
-    VALUES (${user_id_2}, ${user_id_1})
-  `);
+  const recipe_id = result.insertId;
+
+  // Insert ingredients for the family recipe
+  for (const ingredient of ingredients) {
+    const name = ingredient.name.replace(/'/g, "\\'");
+    const amount = ingredient.amount.replace(/'/g, "\\'");
+
+    // Insert ingredient if not exists
+    let ingredientResult = await DButils.execQuery(`
+      INSERT IGNORE INTO ingredients (name, amount) VALUES ('${name}', '${amount}');
+    `);
+
+    // Get the ingredient_id
+    const ingredient_id = ingredientResult.insertId || (
+      await DButils.execQuery(`SELECT ingredient_id FROM ingredients WHERE name='${name}' AND amount='${amount}'`)
+    )[0].ingredient_id;
+
+    // Link ingredient to family recipe
+    await DButils.execQuery(`
+      INSERT INTO family_recipe_ingredients (recipe_id, ingredient_id) 
+      VALUES (${recipe_id}, ${ingredient_id});
+    `);
+  }
+
+  return recipe_id;
 }
 
 /**
- * Get all recipes created by the user's family members (preview)
+ * Get family recipes for a user
  */
 async function getFamilyRecipes(user_id) {
-  const familyTies = await DButils.execQuery(`
-    SELECT user_id_2 AS family_id FROM family_ties WHERE user_id_1 = ${user_id}
-    UNION
-    SELECT user_id_1 AS family_id FROM family_ties WHERE user_id_2 = ${user_id}
+  // Get all family recipes for this user
+  const familyRecipesResult = await DButils.execQuery(`
+    SELECT * FROM family_recipes WHERE user_id = ${user_id}
   `);
-  const familyIds = [...new Set(familyTies.map(f => f.family_id).filter(id => id !== user_id))];
 
-  if (familyIds.length === 0) {
-    return [];
-  }
+  // Get ingredients for each family recipe
+  const recipes = await Promise.all(familyRecipesResult.map(async (recipe) => {
+    const ingredientsResult = await DButils.execQuery(`
+      SELECT i.name, i.amount
+      FROM ingredients i
+      JOIN family_recipe_ingredients fri ON i.ingredient_id = fri.ingredient_id
+      WHERE fri.recipe_id = ${recipe.recipe_id}
+    `);
 
-  const recipesResult = await DButils.execQuery(`
-    SELECT recipe_id
-    FROM recipes
-    WHERE created_by IN (${familyIds.join(",")})
-  `);
-  const recipeIds = recipesResult.map(r => r.recipe_id);
+    return {
+      id: recipe.recipe_id,
+      user_id: recipe.user_id,
+      family_member: recipe.family_member,
+      title: recipe.title,
+      image: recipe.image,
+      readyInMinutes: recipe.readyInMinutes,
+      servings: recipe.servings,
+      vegan: !!recipe.vegan,
+      vegetarian: !!recipe.vegetarian,
+      glutenFree: !!recipe.glutenFree,
+      ingredients: ingredientsResult.map(ingredient => ({
+        name: ingredient.name,
+        amount: ingredient.amount
+      })),
+      steps: recipe.steps ? JSON.parse(recipe.steps) : []
+    };
+  }));
 
-  if (recipeIds.length === 0) {
-    return [];
-  }
-  return await Promise.all(recipeIds.map(id => recipe_utils.getRecipePreview(id)));
+  return recipes;
 }
 
 /**
@@ -175,12 +249,17 @@ async function markAsViewed(user_id, recipe_id, is_DB) {
   `);
 }
 
+// Remove old family_ties related functions and exports
+// exports.addFamilyRelationship = addFamilyRelationship;
+
+// Add new family recipe related exports
+exports.addFamilyRecipe = addFamilyRecipe;
+exports.getFamilyRecipes = getFamilyRecipes;
 exports.authenticateUser = authenticateUser;
 exports.markAsFavorite = markAsFavorite;
 exports.getFavoriteRecipes = getFavoriteRecipes;
 exports.getFavoriteRecipesPreview = getFavoriteRecipesPreview;
 exports.getMyRecipesPreview = getMyRecipesPreview;
 exports.getViewedRecipesPreview = getViewedRecipesPreview;
-exports.addFamilyRelationship = addFamilyRelationship;
-exports.getFamilyRecipes = getFamilyRecipes;
 exports.markAsViewed = markAsViewed;
+exports.isRecipeFavorite = isRecipeFavorite;

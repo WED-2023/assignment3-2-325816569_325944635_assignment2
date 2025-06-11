@@ -38,6 +38,7 @@ exports.initializeTables = async function () {
         title VARCHAR(255) NOT NULL,
         image VARCHAR(2083),
         readyInMinutes INT,
+        servings INT DEFAULT 1,
         vegan BOOLEAN DEFAULT FALSE,
         vegetarian BOOLEAN DEFAULT FALSE,
         glutenFree BOOLEAN DEFAULT FALSE,
@@ -96,12 +97,29 @@ exports.initializeTables = async function () {
     `);
 
     await MySql.query(`
-      CREATE TABLE IF NOT EXISTS family_ties (
-        user_id_1 INT NOT NULL,
-        user_id_2 INT NOT NULL,
-        PRIMARY KEY (user_id_1, user_id_2),
-        FOREIGN KEY (user_id_1) REFERENCES users(user_id) ON DELETE CASCADE,
-        FOREIGN KEY (user_id_2) REFERENCES users(user_id) ON DELETE CASCADE
+      CREATE TABLE IF NOT EXISTS family_recipes (
+        recipe_id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        family_member VARCHAR(255) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        image VARCHAR(2083),
+        readyInMinutes INT,
+        servings INT DEFAULT 1,
+        vegan BOOLEAN DEFAULT FALSE,
+        vegetarian BOOLEAN DEFAULT FALSE,
+        glutenFree BOOLEAN DEFAULT FALSE,
+        steps TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+      );
+    `);
+
+    await MySql.query(`
+      CREATE TABLE IF NOT EXISTS family_recipe_ingredients (
+        recipe_id INT NOT NULL,
+        ingredient_id INT NOT NULL,
+        PRIMARY KEY (recipe_id, ingredient_id),
+        FOREIGN KEY (recipe_id) REFERENCES family_recipes(recipe_id) ON DELETE CASCADE,
+        FOREIGN KEY (ingredient_id) REFERENCES ingredients(ingredient_id) ON DELETE CASCADE
       );
     `);
 

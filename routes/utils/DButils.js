@@ -37,6 +37,7 @@ exports.initializeTables = async function () {
         recipe_id INT AUTO_INCREMENT PRIMARY KEY,
         title VARCHAR(255) NOT NULL,
         image VARCHAR(2083),
+        popularity INT DEFAULT 0,
         readyInMinutes INT,
         servings INT DEFAULT 1,
         vegan BOOLEAN DEFAULT FALSE,
@@ -45,15 +46,6 @@ exports.initializeTables = async function () {
         steps TEXT NOT NULL,
         created_by INT,
         FOREIGN KEY (created_by) REFERENCES users(user_id) ON DELETE CASCADE
-      );
-    `);
-
-    await MySql.query(`
-      CREATE TABLE IF NOT EXISTS popularity (
-        recipe_id INT NOT NULL,
-        likes INT DEFAULT 0,
-        is_DB BOOLEAN NOT NULL,
-        PRIMARY KEY (recipe_id, is_DB)
       );
     `);
 

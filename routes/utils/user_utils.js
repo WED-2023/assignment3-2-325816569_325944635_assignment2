@@ -249,9 +249,6 @@ async function markAsViewed(user_id, recipe_id, is_DB) {
   `);
 }
 
-// Remove old family_ties related functions and exports
-// exports.addFamilyRelationship = addFamilyRelationship;
-
 // Add new family recipe related exports
 exports.addFamilyRecipe = addFamilyRecipe;
 exports.getFamilyRecipes = getFamilyRecipes;
@@ -260,6 +257,9 @@ exports.markAsFavorite = markAsFavorite;
 exports.getFavoriteRecipes = getFavoriteRecipes;
 exports.getFavoriteRecipesPreview = getFavoriteRecipesPreview;
 exports.getMyRecipesPreview = getMyRecipesPreview;
+exports.getViewedRecipesPreview = getViewedRecipesPreview;
+exports.markAsViewed = markAsViewed;
+exports.isRecipeFavorite = isRecipeFavorite;
 exports.getViewedRecipesPreview = getViewedRecipesPreview;
 exports.markAsViewed = markAsViewed;
 exports.isRecipeFavorite = isRecipeFavorite;

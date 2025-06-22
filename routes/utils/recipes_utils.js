@@ -3,15 +3,6 @@ const api_domain = "https://api.spoonacular.com/recipes";
 const DButils = require("./DButils");
 require("dotenv").config();
 
-
-
-async function getRecipeLikes(recipe_id, is_DB) {
-  const result = await DButils.execQuery(
-    `SELECT likes FROM popularity WHERE recipe_id = ${recipe_id} AND is_DB = ${is_DB ? 1 : 0}`
-  );
-  return result.length > 0 ? result[0].likes : 0;
-}
-
 /**
  * Get recipes list from spooncular response and extract the relevant recipe data for preview
  * @param {*} recipes_info 
@@ -29,9 +20,8 @@ async function getRecipeDetails(recipe_id) {
     let recipe_info = await getRecipeInformation(recipe_id);
     let { id, title, readyInMinutes, image, aggregateLikes, vegan, vegetarian, glutenFree, extendedIngredients, instructions, servings } = recipe_info.data;
 
-    // Get likes from DB for this spoonacular recipe
-    const dbLikes = await getRecipeLikes(id, false);
-    const popularity = aggregateLikes + dbLikes;
+    // For API recipes, use aggregateLikes directly
+    const popularity = aggregateLikes || 0;
 
     // Extract ingredients: list of { name, amount }
     const ingredients = (extendedIngredients || []).map(ing => ({
@@ -43,7 +33,7 @@ async function getRecipeDetails(recipe_id) {
         id: id,
         title: title,
         readyInMinutes: readyInMinutes,
-        servings: servings || 4, // Include servings with a default value if missing
+        servings: servings || 4,
         image: image,
         popularity: popularity,
         vegan: vegan,
@@ -68,15 +58,15 @@ async function getRecipeDetailsFromDB(recipe_id) {
       WHERE recipe_id = ${recipe_id}
     )
   `);
-  const { recipe_id: id, title, image, readyInMinutes, servings, vegan, vegetarian, glutenFree, steps } = recipe_info[0];
-  const popularity = await getRecipeLikes(id, true);
+  const { recipe_id: id, title, image, popularity, readyInMinutes, servings, vegan, vegetarian, glutenFree, steps } = recipe_info[0];
+  
   return {
     id: id,
     title: title,
     readyInMinutes: readyInMinutes,
-    servings: servings, // Include servings with a default value if missing
+    servings: servings,
     image: image,
-    popularity: popularity,
+    popularity: popularity || 0,
     vegan: !!vegan,
     vegetarian: !!vegetarian,
     glutenFree: !!glutenFree,
@@ -104,9 +94,8 @@ async function isRecipeViewed(user_id, recipe_id, is_DB) {
  * Extract recipe preview data with viewed and favorite status
  */
 async function extractRecipePreview(recipe, is_DB, user_id = null) {
-  // Get popularity/likes
-  const dbLikes = await getRecipeLikes(recipe.id, is_DB);
-  const popularity = (recipe.aggregateLikes || 0) + dbLikes;
+  // For API recipes use aggregateLikes, for DB recipes use popularity field
+  const popularity = is_DB ? (recipe.popularity || 0) : (recipe.aggregateLikes || 0);
   
   // Check viewed and favorite status if user is logged in
   let viewed = false;
@@ -136,7 +125,7 @@ async function extractRecipePreview(recipe, is_DB, user_id = null) {
 async function getRecipePreview(recipe_id, user_id = null) {
   try {
     const query = `
-      SELECT recipe_id AS id, title, readyInMinutes, image, vegan, vegetarian, glutenFree
+      SELECT recipe_id AS id, title, readyInMinutes, image, popularity, vegan, vegetarian, glutenFree
       FROM recipes
       WHERE recipe_id = ?
     `;
@@ -196,14 +185,14 @@ async function searchRecipes(query, number = 5, cuisine, diet, intolerances, use
   if (!response.data || !response.data.results) {
     throw new Error("Invalid response from Spoonacular API");
   }
-  // For each recipe, get aggregateLikes + likes from DB and favorite status if user is logged in
+  
   return await Promise.all(
     response.data.results.map(recipe => extractRecipePreview(recipe, false, user_id))
   );
 }
 
 async function createRecipe(user_id, body) {
-  let { title, image, readyInMinutes, servings, aggregateLikes, vegan, vegetarian, glutenFree, ingredients, steps } = body;
+  let { title, image, readyInMinutes, servings, popularity, vegan, vegetarian, glutenFree, ingredients, steps } = body;
 
   // Validate required fields
   if (!title || !ingredients || !steps) {
@@ -215,24 +204,16 @@ async function createRecipe(user_id, body) {
   vegetarian = !!vegetarian;
   glutenFree = !!glutenFree;
 
-  // Insert the recipe into the recipes table
+  // Insert the recipe into the recipes table with popularity field
   const recipeResult = await DButils.execQuery(`
-    INSERT INTO recipes (title, image, readyInMinutes, servings, vegan, vegetarian, glutenFree, steps, created_by)
-    VALUES ('${title}', '${image}', ${readyInMinutes || null}, ${servings || 4}, ${vegan}, ${vegetarian}, ${glutenFree}, '${JSON.stringify(steps)}', ${user_id});
+    INSERT INTO recipes (title, image, popularity, readyInMinutes, servings, vegan, vegetarian, glutenFree, steps, created_by)
+    VALUES ('${title}', '${image}', ${popularity || 0}, ${readyInMinutes || null}, ${servings || 4}, ${vegan}, ${vegetarian}, ${glutenFree}, '${JSON.stringify(steps)}', ${user_id});
   `);
 
   const recipe_id = recipeResult.insertId;
 
-  // Insert likes into popularity table for new DB recipe (default 0)
-  await DButils.execQuery(`
-    INSERT INTO popularity (recipe_id, likes, is_DB)
-    VALUES (${recipe_id}, ${aggregateLikes || 0}, 1)
-    ON DUPLICATE KEY UPDATE likes = likes
-  `);
-
   // Insert ingredients into the ingredients and recipe_ingredients tables
   for (const ingredient of ingredients) {
-    // ingredient should be an object: { name, amount }
     const name = ingredient.name;
     const amount = ingredient.amount;
 
@@ -254,8 +235,13 @@ async function createRecipe(user_id, body) {
   return recipe_id;
 }
 
-
-
+exports.getRecipePreview = getRecipePreview;
+exports.getRecipeDetails = getRecipeDetails;
+exports.getRecipeDetailsFromDB = getRecipeDetailsFromDB;
+exports.getAPIRecipePreview = getAPIRecipePreview;
+exports.getRandomRecipes = getRandomRecipes;
+exports.searchRecipes = searchRecipes;
+exports.createRecipe = createRecipe;
 exports.getRecipePreview = getRecipePreview;
 exports.getRecipeDetails = getRecipeDetails;
 exports.getRecipeDetailsFromDB = getRecipeDetailsFromDB;

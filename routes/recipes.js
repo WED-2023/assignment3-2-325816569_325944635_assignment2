@@ -83,21 +83,4 @@ router.post("/create", async (req, res, next) => {
   }
 });
 
-/**
- * Set the number of likes for a recipe (DB or Spoonacular)
- */
-router.post("/set-likes/:recipeId", async (req, res, next) => {
-  try {
-    const recipeId = req.params.recipeId;
-    const { likes, is_DB } = req.body;
-    if (typeof likes !== "number" || typeof is_DB !== "boolean") {
-      return res.status(400).send({ message: "likes (number) and is_DB (boolean) are required" });
-    }
-    await recipes_utils.setRecipeLikes(recipeId, is_DB, likes);
-    res.status(200).send({ message: "Likes updated successfully" });
-  } catch (error) {
-    next(error);
-  }
-});
-
 module.exports = router;

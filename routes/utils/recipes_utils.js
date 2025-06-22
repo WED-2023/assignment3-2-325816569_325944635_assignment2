@@ -254,13 +254,7 @@ async function createRecipe(user_id, body) {
   return recipe_id;
 }
 
-async function setRecipeLikes(recipe_id, is_DB, likes) {
-  await DButils.execQuery(`
-    INSERT INTO popularity (recipe_id, likes, is_DB)
-    VALUES (${recipe_id}, ${likes}, ${is_DB ? 1 : 0})
-    ON DUPLICATE KEY UPDATE likes = ${likes}
-  `);
-}
+
 
 exports.getRecipePreview = getRecipePreview;
 exports.getRecipeDetails = getRecipeDetails;
@@ -269,5 +263,4 @@ exports.getAPIRecipePreview = getAPIRecipePreview;
 exports.getRandomRecipes = getRandomRecipes;
 exports.searchRecipes = searchRecipes;
 exports.createRecipe = createRecipe;
-exports.setRecipeLikes = setRecipeLikes;
 

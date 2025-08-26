@@ -82,18 +82,22 @@ app.use("/users", user);
 app.use("/recipes", recipes);
 app.use("/", auth);
 
-
-
-
-
+// Add this catch-all route AFTER your API routes but BEFORE the error handler
+// This handles client-side routing for Vue.js
+app.get('*', (req, res) => {
+  // Only serve index.html for non-API routes
+  if (!req.path.startsWith('/users') && !req.path.startsWith('/recipes') && !req.path.startsWith('/Register') && !req.path.startsWith('/Login') && !req.path.startsWith('/Logout') && !req.path.startsWith('/alive')) {
+    res.sendFile(__dirname + "/index.html");
+  } else {
+    res.status(404).send({ message: "Not found", success: false });
+  }
+});
 
 // Default router
 app.use(function (err, req, res, next) {
   console.error(err);
   res.status(err.status || 500).send({ message: err.message, success: false });
 });
-
-
 
 const server = app.listen(port, () => {
   console.log(`Server listen on port ${port}`);
